@@ -15,6 +15,7 @@ My solution to the SRE problem given by BTQ on 2023/08/31
 7. CI/CD solution is Jenkins
 8. The underlining Jenkins node and node image have all the required permissions preconfigured
 9. The underlining Jenkins node and node image have all the necessary binary installed
+10. Redeploying all pods on the cluster is not restricted (workload should be configured to a rolling update)
 
 ## Installation
 
@@ -27,3 +28,10 @@ NOTE: try adding `--dry-run` to view the raw YAML files without actually deployi
 
 ### via Jenkins
 Depending on the Jenkins configured, ...
+
+## Configuration
+
+### How to modify geth eth network
+1. Check and find the network ID of the network you want
+2. Using the network ID, modify **NetworkId** in helm/configs/values.yaml (under *[Eth]*)
+3. Redeploy the helm deployment

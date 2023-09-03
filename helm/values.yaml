@@ -1,0 +1,62 @@
+workload: deployment
+replicas: 2
+
+imageName: ethereum/client-go
+imageTag: v1.12.2
+
+argument: --config /mount/config/geth_config.toml
+
+services:
+  nodePort:
+    portConfigs:
+      - name: http
+        containerPort: 8545
+      - name: metrics
+        containerPort: 6060
+
+ingress:
+  enabled: true
+  ingressConfig:
+    - reservedIPName: "btq-sre-rpc-ip"
+      targets:
+        - domainName: "btq-sre.com"
+          serviceTargets:
+            - domainPath: "/*"
+              servicePort: 8545
+
+resources:
+  limits:
+    cpu: 4
+    memory: 16Gi
+  requests:
+    cpu: 4
+    memory: 16Gi
+
+liveness:
+  action:
+    tcpSocket:
+      port: 8545
+  initialDelay: 60
+  period: 120
+
+readiness:
+  action:
+    tcpSocket:
+      port: 8545
+  initialDelay: 10
+  period: 10
+
+scalingConfig:
+  maxSurge: 1
+  maxUnavailable: 0
+  type: RollingUpdate
+
+hpa:
+  enabled: true
+  min: 2
+  max: 4
+  targetCPU: 80
+
+configurations:
+  files:
+    - geth_config.toml

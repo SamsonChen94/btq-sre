@@ -17,6 +17,9 @@ My solution to the SRE problem given by BTQ on 2023/08/31
 9. The underlining Jenkins node and node image have all the necessary binary installed
 10. Redeploying all pods on the cluster is not restricted (workload should be configured to a rolling update)
 11. Prometheus is installed and configured to automatically scrape data from Kubernetes services
+12. The deployment is CPU bound, hence a threshold of 80% CPU utilization for scaling
+13. All downstream and upstream infrastructure are highly available
+14. High availability is defined to only encompassing regional HA (not including multi-regional HA)
 
 ## Installation
 

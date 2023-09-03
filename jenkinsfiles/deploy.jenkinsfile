@@ -1,0 +1,115 @@
+// NOTE: sort alphabetically
+// please always put fool-proofing "NOTSUPPORT" at 1st place
+def supportedServices = [
+    'NOTSUPPORT',
+    'btq-sre',
+]
+
+def supportedEnvs = [
+    'NOTSUPPORT',
+    'sta',
+    'rc',
+    'prod',
+]
+
+properties([
+    buildDiscarder(
+        logRotator(
+            numToKeepStr: '30'
+        )
+    ),
+    parameters([
+        choice(
+            choices: supportedServices.join('\n'),
+            description: '',
+            name: 'SERVICE'
+        ),
+        string(
+            defaultValue: '',
+            description: '',
+            name: 'REVISION',
+            trim: false
+        ),
+        choice(
+            choices: supportedEnvs.join('\n'),
+            description: '',
+            name: 'ENVIRONMENT'
+        )]
+    )
+])
+
+node('gcp') { timestamps { ansiColor('xterm') {
+  def job_env           = env.ENVIRONMENT
+  def GCLOUD_CREDS      = null
+  def GCLOUD_PROJECT    = null
+  def GCLOUD_CLUSTER    = null
+  def GCLOUD_ZONE       = null
+
+  switch (job_env) {
+    case ["prod"]:
+      GCLOUD_CREDS    = "jenkins.prod"
+      GCLOUD_PROJECT  = "btq-prod"
+      GCLOUD_ZONE     = "us-west1"
+      GCLOUD_CLUSTER  = "btq-prod-cluster"
+      break
+  }
+  env.KUBE_CONTEXT = "gke_${GCLOUD_PROJECT}_${GCLOUD_ZONE}_${GCLOUD_CLUSTER}"
+
+  stage('Setup Environment') {
+    // cleanup workspace before start
+    deleteDir()
+
+    // block if selected SERVICE not supported
+    if (params.SERVICE == supportedServices[0]) {
+        error('SERVICE not supported')
+    }
+
+    // block if selected ENVIRONMENT not supported
+    if (params.ENVIRONMENT == supportedEnvs[0]) {
+        error('ENVIRONMENT not supported')
+    }
+
+    // setup binary output directory
+    sh("mkdir -p ${WORKSPACE}/bin")
+
+    // utilities version check
+    sh("kubectl version --client --short")
+    sh("helm version --client --short")
+    sh("gcloud version")
+
+    // ensure credentials for gcloud is prepared
+    withCredentials([
+      file(
+        credentialsId: "${GCLOUD_CREDS}",
+        variable: 'KEY_FILE'
+      )
+    ]) {
+      sh("gcloud auth activate-service-account --key-file=${KEY_FILE}")
+      sh("gcloud container clusters get-credentials ${GCLOUD_CLUSTER} --zone ${GCLOUD_ZONE} --project ${GCLOUD_PROJECT}")
+    }
+  } // end of stage
+
+  stage('Git checkout') {
+    sh("mkdir -p ${WORKSPACE}/github.com/SamsonChen94/btq-sre")
+    dir("${WORKSPACE}/github.com/SamsonChen94/btq-sre") {
+      git url: 'git@github.com:SamsonChen94/btq-sre.git',
+          credentialsId: 'ID_GOES_HERE',
+          branch: 'main'
+
+      sh("git reset HEAD --hard")
+      sh("git checkout main")
+    } // end of dir
+  } // end of stage
+
+  /*
+
+  Additional steps pertaining builds, tests, and database schema migration goes here
+
+  */
+
+  stage('Deploy') {
+    dir("${WORKSPACE}/github.com/SamsonChen94/btq-sre/helm") {
+      sh("helm upgrade --install -f configs/values.yaml -f values.yaml btq-sre .")
+    } // end of dir
+  } // end of stage
+} /* end of ansiColor */ } /* end of timestamps */ } /* end of node */

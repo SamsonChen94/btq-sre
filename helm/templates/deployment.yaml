@@ -1,0 +1,60 @@
+{{- /*
+  This resource is only for deployments. One of the main workloads in a
+  Kubernetes environment. When paired with other Kubernetes resources like
+  services, config maps, secrets, and horizontal pod autoscalers, this resource
+  will have different YAML configurations. Internally, deployments act as a
+  template for the actual pods to run and generates replica sets which in turn,
+  creates the necessary pods for business functionalities.
+  Ref: https://kubernetes.io/docs/tasks/run-application/run-stateless-application-deployment
+*/}}
+{{- if eq .Values.workload "deployment" }}
+{{- $hpaArgs := dict "hpa" .Values.hpa "hpaOutput" (dict) }}
+{{- include "hpaEnabled" $hpaArgs }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    {{- include "labels" . | nindent 4 }}
+  name: {{ template "fullname" . }}-deploy
+  namespace: {{ .Release.Namespace }}
+spec:
+  minReadySeconds: 10
+  progressDeadlineSeconds: 600
+  {{- /*
+    Sets the deployment's replica count. In the case of HPA being enabled, there
+    is a case whereby the workload will take the new replica count before HPA
+    kicks, effectively terminating pods before it is ready to be rolled over.
+  */}}
+  {{- if $hpaArgs.hpaOutput.hpaEnabled }}
+  replicas: {{ $hpaArgs.hpa.min }}
+  {{- else }}
+  replicas: {{ .Values.replicas | default 1 }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  selector:
+    {{- /*
+      WARNING: Selector labels are immutable! That means, once deployed, cannot
+               be changed without creating a new resource. In most cases, the
+               deployment will fail to deploy. However, at the worst case,
+               existing deployments will be destroyed and recreated.
+    */}}
+    matchLabels:
+      {{- include "selectorLabels" . | nindent 6 }}
+  {{- if .Values.scalingConfig }}
+  strategy:
+    {{- if eq .Values.scalingConfig.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.scalingConfig.maxSurge | default 1 }}
+      maxUnavailable: {{ .Values.scalingConfig.maxUnavailable | default 0 }}
+    type: {{ .Values.scalingConfig.type }}
+    {{- else if eq .Values.scalingConfig.type "Recreate" }}
+    {{- if or .Values.scalingConfig.maxSurge .Values.scalingConfig.maxUnavailable }}
+    {{- fail ( printf "\n\nError --> maxSurge and maxUnavailable are not compatible with 'Recreate' scalingConfig type\n" ) -}}
+    {{- end }}
+    type: {{ .Values.scalingConfig.type }}
+    {{- else }}
+    {{- fail ( printf "\n\nError --> Unsupported scaling type %s\n" .Values.scalingConfig.type ) -}}
+    {{- end }}
+  {{- end }}
+  {{- include "podSpecTemplate" . | indent 2 }}
+{{- end }}

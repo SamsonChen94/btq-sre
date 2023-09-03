@@ -1,0 +1,71 @@
+{{- /*
+  This resource is only for services. Services in Kubernetes act very similar to
+  either a proxy or a load balancer internal to Kubernetes. With the correct
+  configuration and proper service solutions (i.e. AWS, GCP, Azure), services
+  play the role of routing traffic to certain pods in a multitude of different
+  methods. Note that service to workload relation is a many-to-many relation
+  which makes it possible to configure multiple services to multiple workloads.
+  Ref: https://kubernetes.io/docs/concepts/services-networking/service
+*/}}
+{{- if and .Values.services .Values.workload }}
+{{- range $key, $service := .Values.services }}
+{{- if ne $key "none" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  {{- if or ( or ( and ( ne $key "clusterIP" ) ( ne $key "headlessClusterIP" ) ) $service.backendConfig ) $.Values.prometheusTargets }}
+  annotations:
+    {{- if and ( ne $key "clusterIP" ) ( ne $key "headlessClusterIP" ) }}
+    cloud.google.com/neg: '{"ingress": true}'
+    {{- end }}
+    {{- if eq $key "internalLoadBalancer" }}
+    cloud.google.com/load-balancer-type: "Internal"
+    {{- if $service.allowGlobal }}
+    networking.gke.io/internal-load-balancer-allow-global-access: "true"
+    {{- end }}
+    {{- end }}
+    {{- if $service.backendConfig }}
+    cloud.google.com/backend-config: {{ printf "{\"default\": \"%s-%s-bc\"}" ( include "fullname" $ ) ( $key | lower ) | squote }}
+    {{- end }}
+    {{- if $.Values.prometheusTargets }}
+    prometheus.io/scrape: 'true'
+    prometheus.io/path: {{ $.Values.prometheusTargets.path | squote }}
+    prometheus.io/port: {{ $.Values.prometheusTargets.port | squote }}
+    {{- end }}
+  {{- end }}
+  labels:
+    {{- include "labels" $ | nindent 4 }}
+  name: {{ template "fullname" $ }}-{{ $key | lower }}-svc
+  namespace: {{ $.Release.Namespace }}
+spec:
+  {{- if eq $key "headlessClusterIP" }}
+  clusterIP: None
+  {{- end }}
+  {{- if or ( eq $key "loadBalancer" ) ( eq $key "internalLoadBalancer" ) }}
+  {{- if $service.staticIP }}
+  loadBalancerIP: {{ $service.staticIP }}
+  {{- end }}
+  {{- if $service.whitelistedIPs }}
+  loadBalancerSourceRanges:
+    {{- toYaml $service.whitelistedIPs | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  ports:
+    {{- include "servicePorts" $service.portConfigs | indent 4 }}
+  selector:
+    {{- include "selectorLabels" $ | nindent 4 }}
+  {{- if or ( eq $key "clusterIP" ) ( eq $key "headlessClusterIP" ) }}
+  type: ClusterIP
+  {{- else if or ( eq $key "loadBalancer" ) ( eq $key "internalLoadBalancer" ) }}
+  type: LoadBalancer
+  {{- else if eq $key "nodePort" }}
+  type: NodePort
+  {{- else if eq $key "none" }}
+  {{- /* no operation */}}
+  {{- else }}
+  {{- fail ( printf "\n\nError --> unsupported service type %s\n" $key ) -}}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

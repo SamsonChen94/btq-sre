@@ -1,0 +1,54 @@
+{{- /*
+  This resource is only for config maps. Data stored in config maps will be
+  injected into the workload post-deployment. Config maps can store either
+  strings or files. This implementation assumes all environment variables from
+  the workload are defined inside config maps. This means strings are injected
+  as environment variables via 'env' definition and files are injected as file
+  mounted objects via the 'mountVolume' and 'volume' definitions.
+  Ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap
+*/}}
+{{- $configDataFiles := ( list ) }}
+{{- $configDataStrings := ( list ) }}
+{{- if .Values.additionalContainers }}
+{{- range $additionalContainer := .Values.additionalContainers }}
+{{- $_ := set $additionalContainer "configFiles" $.Values.configFiles }}
+{{- $_ := set $additionalContainer "configStrings" $.Values.configStrings }}
+{{- $additionalConfigArgs := dict "config" $additionalContainer "configOutput" (dict) }}
+{{- include "configEnabledCheck" $additionalConfigArgs }}
+{{- if $additionalConfigArgs.configOutput.configFile }}
+{{- $configDataFiles = concat $configDataFiles $additionalConfigArgs.config.configurations.files }}
+{{- end }}
+{{- if $additionalConfigArgs.configOutput.configString }}
+{{- $configDataStrings = concat $configDataStrings $additionalConfigArgs.config.configurations.strings }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $configArgs := dict "config" .Values "configOutput" (dict) }}
+{{- include "configEnabledCheck" $configArgs }}
+{{- if or ( or $configArgs.configOutput.configFile $configArgs.configOutput.configString ) ( or ( not ( empty $configDataFiles ) ) ( not ( empty $configDataStrings ) ) ) }}
+{{- if $configArgs.configOutput.configFile }}
+{{- $configDataFiles = concat $configArgs.config.configurations.files $configDataFiles }}
+{{- end }}
+{{- if $configArgs.configOutput.configString }}
+{{- $configDataStrings = concat $configArgs.config.configurations.strings $configDataStrings }}
+{{- end }}
+apiVersion: v1
+data:
+  {{- if $configDataFiles }}
+  {{- range $configFileName := $configDataFiles }}
+  {{ $configFileName }}: |
+    {{- get $configArgs.config.configFiles ( printf $configFileName ) | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  {{- if $configDataStrings }}
+  {{- range $configStringName := $configDataStrings }}
+  {{ $configStringName }}: {{ get $configArgs.config.configStrings ( printf $configStringName ) | quote }}
+  {{- end }}
+  {{- end }}
+kind: ConfigMap
+metadata:
+  labels:
+    {{- include "labels" . | nindent 4 }}
+  name: {{ template "fullname" . }}-cm
+  namespace: {{ .Release.Namespace }}
+{{- end }}

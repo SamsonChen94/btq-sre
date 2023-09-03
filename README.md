@@ -36,3 +36,22 @@ Depending on the Jenkins configured, ...
 1. Check and find the network ID of the network you want
 2. Using the network ID, modify **NetworkId** in helm/configs/values.yaml (under *[Eth]*)
 3. Redeploy the helm deployment
+
+## List of Metrics to Monitor
+
+### System (VM) related
+1. CPU
+2. Memory
+3. Disk space
+4. Disk IOPs
+5. File descriptor
+6. Network throughput
+
+### Application related
+1. Rate of transactions
+2. Transaction duration
+3. Rate of chain executions
+4. Rate of chain validations
+5. Rate of chain writes
+6. Rate of chain account reads/writes/updates/hashes/commits
+7. Rate of chain storage reads/writes/updates/hashes/commits

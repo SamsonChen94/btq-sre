@@ -8,3 +8,7 @@ configFiles:
     [Metrics]
       HTTP = "0.0.0.0"
       Port = 6060
+  genesis.json: |
+    {
+      "note": "genesis file goes here"
+    }

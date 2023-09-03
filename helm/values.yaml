@@ -60,6 +60,7 @@ hpa:
 configurations:
   files:
     - geth_config.toml
+    - genesis.json
 
 prometheusTargets:
   scrape: true
